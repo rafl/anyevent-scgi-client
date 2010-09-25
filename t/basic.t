@@ -4,6 +4,9 @@ use Test::More;
 use Test::TCP;
 use HTTP::Headers;
 use HTTP::Response;
+use POE; # EV is really broken, and it happens to be the default choice of
+         # AnyEvent much too often, so we just explicitly load something we know
+         # actually works
 use AnyEvent;
 use AnyEvent::SCGI;
 use Data::Dump 'pp';
@@ -33,8 +36,10 @@ my $s = scgi_server '127.0.0.1', $port, sub {
     $handle->push_shutdown;
 };
 
+open my $fh, '<', $0;
+
 my $cv = AnyEvent->condvar;
-scgi_request ['127.0.0.1', $port], { moo => 42 }, 'kooh', sub {
+scgi_request ['127.0.0.1', $port], { moo => 42 }, [-s $fh, $fh], sub {
     $cv->send($_[0]);
 };
 
@@ -47,9 +52,9 @@ ok $resp, 'response looks like http';
 is $resp->code, 200, 'status code';
 
 is_deeply eval $resp->content, {
-    body => \'kooh',
+    body => \do { seek $fh, 0, 0; local $/; <$fh> },
     env  => {
-        CONTENT_LENGTH => 4,
+        CONTENT_LENGTH => -s $fh,
         SCGI           => 1,
         moo            => 42,
     },

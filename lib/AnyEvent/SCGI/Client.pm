@@ -19,10 +19,13 @@ use Sub::Exporter -setup => {
 =cut
 
 sub scgi_request {
-    my ($connect, $env, $body, $cb) = @_;
+    my ($connect, $env, $_body, $cb) = @_;
+
+    my ($body_len, $body) = ref $_body eq ref []
+        ? @{ $_body } : (length $_body, $_body);
 
     my @env = (
-        CONTENT_LENGTH => defined $body ? length $body : 0,
+        CONTENT_LENGTH => $body_len,
         SCGI => 1, %{ $env || {} },
     );
 
@@ -34,8 +37,26 @@ sub scgi_request {
              ? 'connect' : 'fh') => $connect,
         on_connect => sub {
             $h->push_write(netstring => $req);
-            $h->push_write($body) if defined $body;
-            $h->push_shutdown;
+
+            if (defined $body && !ref $body) {
+                $h->push_write($body);
+                $h->push_shutdown;
+            }
+            else {
+                my $fh;
+                $fh = AnyEvent::Handle->new(
+                    fh => $body,
+                    on_read => sub {
+                        $h->push_write($fh->{rbuf});
+                        $fh->{rbuf} = '';
+                    },
+                    on_eof => sub {
+                        $h->push_shutdown;
+                        undef $fh;
+                    },
+                );
+            }
+
         },
         on_read => sub {
             $cb->(\$h->{rbuf});
