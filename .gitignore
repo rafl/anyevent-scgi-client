@@ -1,0 +1,4 @@
+.*
+!.gitignore
+AnyEvent-SCGI-Client-*
+Debian_CPANTS.txt
