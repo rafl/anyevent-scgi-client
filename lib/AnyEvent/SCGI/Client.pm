@@ -6,7 +6,6 @@ package AnyEvent::SCGI::Client;
 
 use AnyEvent;
 use AnyEvent::Handle;
-use List::AllUtils 'reduce';
 use namespace::clean;
 
 use Sub::Exporter -setup => {
@@ -29,7 +28,7 @@ sub scgi_request {
         SCGI => 1, %{ $env || {} },
     );
 
-    my $req = (reduce { sprintf "%s\0%s", $a, $b } @env) . "\0";
+    my $req = join "\0" => @env, '';
 
     my $h;
     $h = AnyEvent::Handle->new(
