@@ -6,7 +6,7 @@ use HTTP::Headers;
 use HTTP::Response;
 use POE; # EV is really broken, and it happens to be the default choice of
          # AnyEvent much too often, so we just explicitly load something we know
-         # actually works
+         # actually works and live with the test dep
 use AnyEvent;
 use AnyEvent::SCGI;
 use Data::Dump 'pp';

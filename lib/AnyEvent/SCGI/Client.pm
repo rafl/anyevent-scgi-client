@@ -13,12 +13,12 @@ use Sub::Exporter -setup => {
     groups  => { default => ['scgi_request'] },
 };
 
-=func scgi_request ($connect, \%env, $body, $cb->())
+=func scgi_request ($connect, \%env, $body | [$length, $fh], $cb->(), ...)
 
 =cut
 
 sub scgi_request {
-    my ($connect, $env, $_body, $cb) = @_;
+    my ($connect, $env, $_body, $cb, @more) = @_;
 
     my ($body_len, $body) = ref $_body eq ref []
         ? @{ $_body } : (length $_body, $_body);
@@ -61,6 +61,7 @@ sub scgi_request {
             $cb->(\$h->{rbuf});
             undef $h;
         },
+        @more,
     );
 }
 
