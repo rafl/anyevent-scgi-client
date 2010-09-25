@@ -21,10 +21,14 @@ my $s = scgi_server '127.0.0.1', $port, sub {
     );
 
     $handle->push_write(
-        sprintf "%s\r\n%s\r\n", $headers->as_string, pp {
-            env  => $env,
-            body => $content,
-        }
+        join qq{\r\n} => (
+            "Status: 200 OK",
+            $headers->as_string,
+            pp {
+                env  => $env,
+                body => $content,
+            }
+        )
     );
     $handle->push_shutdown;
 };
@@ -39,6 +43,8 @@ ok $data && $$data, 'got response';
 
 my $resp = HTTP::Response->parse($$data);
 ok $resp, 'response looks like http';
+
+is $resp->code, 200, 'status code';
 
 is_deeply eval $resp->content, {
     body => \'kooh',
