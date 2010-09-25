@@ -2,6 +2,7 @@ use strict;
 use warnings;
 
 package AnyEvent::SCGI::Client;
+# ABSTRACT: Event-based SCGI client
 
 use AnyEvent;
 use AnyEvent::Handle;
@@ -12,6 +13,10 @@ use Sub::Exporter -setup => {
     exports => ['scgi_request'],
     groups  => { default => ['scgi_request'] },
 };
+
+=func scgi_request ($connect, \%env, $body, $cb->())
+
+=cut
 
 sub scgi_request {
     my ($connect, $env, $body, $cb) = @_;
