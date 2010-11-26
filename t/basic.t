@@ -17,6 +17,12 @@ my $port = empty_port;
 my $s = scgi_server '127.0.0.1', $port, sub {
     my ($handle, $env, $content, $fatal, $err) = @_;
 
+    if ($fatal) {
+        fail "unexpected $err";
+        done_testing;
+        exit;
+    }
+
     my $headers = HTTP::Headers->new(
         'Status'       => 200,
         'Content-Type' => 'text/plain',
@@ -33,31 +39,66 @@ my $s = scgi_server '127.0.0.1', $port, sub {
             }
         )
     );
-    $handle->push_shutdown;
+
+    my $t;
+    $t = AnyEvent->timer(after => 2, cb => sub {
+        $handle->push_write(';');
+        $t = AnyEvent->timer(after => 2, cb => sub {
+            $handle->push_shutdown(1);
+            undef $t;
+        });
+    });
 };
 
-open my $fh, '<', $0;
+sub test_scgi {
+    my ($env, $body) = @_;
 
-my $cv = AnyEvent->condvar;
-scgi_request ['127.0.0.1', $port], { moo => 42 }, [-s $fh, $fh], sub {
-    $cv->send($_[0]);
-};
+    my $cv = AnyEvent->condvar;
+    {
+        my $data;
 
-my $data = $cv->recv;
-ok $data && $$data, 'got response';
+        scgi_request '127.0.0.1', $port, $env, $body, sub {
+            my ($chunk) = @_;
 
-my $resp = HTTP::Response->parse($$data);
-ok $resp, 'response looks like http';
+            if (defined $chunk) {
+                $data .= $chunk;
+            }
+            else {
+                $cv->send($data);
+            }
+        };
+    }
 
-is $resp->code, 200, 'status code';
 
-is_deeply eval $resp->content, {
-    body => \do { seek $fh, 0, 0; local $/; <$fh> },
-    env  => {
-        CONTENT_LENGTH => -s $fh,
-        SCGI           => 1,
-        moo            => 42,
-    },
-}, 'got right env and body';
+    my $data = $cv->recv;
+    ok $data, 'got response';
+
+    my $resp = HTTP::Response->parse($data);
+    ok $resp, 'response looks like http';
+
+    is $resp->code, 200, 'status code';
+
+    is_deeply eval $resp->content, {
+        body => \(ref $body
+                      ? do {
+                          my $fh = $body->[1];
+                          seek $fh, 0, 0; local $/;
+                          <$fh>;
+                      }
+                      : $body),
+        env  => {
+            CONTENT_LENGTH => ref $body ? -s $body->[1] : length $body,
+            SCGI           => 1,
+            %{ $env },
+        },
+    }, 'got right env and body';
+}
+
+test_scgi { moo => 23 }, "foo";
+
+# a big-ish file that's around on pretty every system
+require CPAN;
+open my $fh, '<', $INC{'CPAN.pm'};
+test_scgi { moo => 42 }, [-s $fh, $fh];
 
 done_testing;

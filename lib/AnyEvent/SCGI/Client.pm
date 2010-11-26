@@ -5,7 +5,7 @@ package AnyEvent::SCGI::Client;
 # ABSTRACT: Event-based SCGI client
 
 use AnyEvent;
-use AnyEvent::Handle;
+use AnyEvent::Socket;
 use namespace::clean;
 
 use Sub::Exporter -setup => {
@@ -18,7 +18,7 @@ use Sub::Exporter -setup => {
 =cut
 
 sub scgi_request {
-    my ($connect, $env, $_body, $cb, @more) = @_;
+    my ($host, $service, $env, $_body, $cb, @more) = @_;
 
     my ($body_len, $body) = ref $_body eq ref []
         ? @{ $_body } : (length $_body, $_body);
@@ -29,40 +29,59 @@ sub scgi_request {
     );
 
     my $req = join "\0" => @env, '';
+    my $buf = (length $req) . ":$req,";
+    $buf .= $body if $body && !ref $body;
 
-    my $h;
-    $h = AnyEvent::Handle->new(
-        (ref $connect eq ref []
-             ? 'connect' : 'fh') => $connect,
-        on_connect => sub {
-            $h->push_write(netstring => $req);
+    my $s;
+    $s = tcp_connect $host, $service, sub {
+        my ($fh) = @_ or die "connect failed: $!";
 
-            if (defined $body && !ref $body) {
-                $h->push_write($body);
-                $h->push_shutdown;
-            }
-            else {
-                my $fh;
-                $fh = AnyEvent::Handle->new(
-                    fh => $body,
-                    on_read => sub {
-                        $h->push_write($fh->{rbuf});
-                        $fh->{rbuf} = '';
-                    },
-                    on_eof => sub {
-                        $h->push_shutdown;
-                        undef $fh;
-                    },
-                );
+        my ($w, $bw);
+        my $drain = sub {
+            my $b = $fh->syswrite($buf, length $buf);
+            die $! unless defined $b;
+
+            substr $buf, 0, $b, '';
+
+            if (!length $buf) {
+                undef $w;
             }
 
-        },
-        on_read => sub {
-            $cb->(\$h->{rbuf});
-            undef $h;
-        },
-        @more,
-    );
+            if (ref $body && !$bw || !ref $body) {
+                shutdown $fh, 1;
+            };
+        };
+
+        if ($body && ref $body) {
+            $bw = AnyEvent->io(fh => $body, poll => 'r', cb => sub {
+                my $b = $body->sysread(my $chunk, 8192);
+
+                if ($b) {
+                    $buf .= $chunk;
+                    $w = AnyEvent->io(fh => $fh, poll => 'w', cb => $drain)
+                        if !$w;
+                }
+                else {
+                    undef $bw;
+                }
+            });
+        }
+
+        $w = AnyEvent->io(fh => $fh, poll => 'w', cb => $drain);
+
+        my $r;
+        $r = AnyEvent->io(fh => $fh, poll => 'r', cb => sub {
+            my $b = $fh->sysread(my $chunk, 8192);
+
+            if ($b) {
+                $cb->($chunk);
+            } else {
+                undef $r;
+                $cb->(undef);
+                undef $s;
+            }
+        });
+    };
 }
 
 1;
