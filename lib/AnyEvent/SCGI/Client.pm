@@ -13,7 +13,54 @@ use Sub::Exporter -setup => {
     groups  => { default => ['scgi_request'] },
 };
 
-=func scgi_request ($connect, \%env, $body | [$length, $fh], $cb->(), ...)
+=head1 SYNOPSIS
+
+    use AnyEvent;
+    use AnyEvent::SCGI::Client;
+
+    my $cv = AnyEvent->condvar;
+
+    {
+        my $data;
+        scgi_request '127.0.0.1', '22222', { REQUEST_METHOD => 'GET', ... }, undef, sub {
+            my ($response_chunk) = @_;
+
+            if (defined $response_chunk) {
+                $data .= $response_chunk;
+            }
+            else {
+                $cv->send($data);
+            }
+        };
+    }
+
+    my $response = $cv->recv;
+
+=head1 DESCRIPTION
+
+This module implements an event-based client for the Simple Common Gateway
+Interface protocol, SCGI, using AnyEvent.
+
+=func scgi_request ($host, $service, \%env, $body | [$length, $fh], $cb->($response_chunk))
+
+Initiates an SCGI request to an SCGI server as specified by C<$host> and
+C<$service>. See
+L<AnyEvent::Socket/"$guard = tcp_connect $host, $service, $connect_cb[, $prepare_cb]">
+for a description of possible values for C<$host> and C<$service>.
+
+SCGI headers and their values can be provided in in the C<\%env> hash
+reference. The C<SCGI> and C<CONTENT_LENGTH> headers required by the SCGI
+specification will be provided automatically.
+
+A request body can be provided as either a plain string or an array reference
+containing the length of the body and a filehandle to read it from.
+
+The callback C<$cb> will be called for every chunk of data received as the
+response from the SCGI server. The callback takes on argument containing the
+data received. C<$response_chunk> will be C<undef> to indicate when the SCGI
+server closed the connection after sending its response.
+
+This function is exported by default.
 
 =cut
 
@@ -83,5 +130,13 @@ sub scgi_request {
         });
     };
 }
+
+=head1 SEE ALSO
+
+L<The SCGI specification|http://python.ca/scgi/protocol.txt>
+
+L<AnyEvent::SCGI>
+
+=cut
 
 1;
