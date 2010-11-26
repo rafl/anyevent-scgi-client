@@ -4,9 +4,11 @@ use Test::More;
 use Test::TCP;
 use HTTP::Headers;
 use HTTP::Response;
-use POE; # EV is really broken, and it happens to be the default choice of
-         # AnyEvent much too often, so we just explicitly load something we know
-         # actually works and live with the test dep
+use AnyEvent::Impl::Perl; # EV is really broken, and it happens to be the
+                          # default choice of AnyEvent much too often, so we
+                          # just explicitly load something we know actually
+                          # works most of the time and doesn't require a huge
+                          # test dependency such as POE
 use AnyEvent;
 use AnyEvent::SCGI;
 use Storable 'freeze', 'thaw';
