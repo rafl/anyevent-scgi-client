@@ -9,7 +9,7 @@ use POE; # EV is really broken, and it happens to be the default choice of
          # actually works and live with the test dep
 use AnyEvent;
 use AnyEvent::SCGI;
-use Data::Dump 'pp';
+use Storable 'freeze', 'thaw';
 
 use AnyEvent::SCGI::Client;
 
@@ -33,7 +33,7 @@ my $s = scgi_server '127.0.0.1', $port, sub {
         join qq{\r\n} => (
             "Status: 200 OK",
             $headers->as_string,
-            pp {
+            freeze {
                 env  => $env,
                 body => $content,
             }
@@ -78,7 +78,10 @@ sub test_scgi {
 
     is $resp->code, 200, 'status code';
 
-    is_deeply eval $resp->content, {
+    my $content = $resp->content;
+    is substr($content, length($content) - 1, 1, ''), ';', 'got last write';
+
+    is_deeply thaw($content), {
         body => \(ref $body
                       ? do {
                           my $fh = $body->[1];
